@@ -25,11 +25,13 @@
   "license": "ISC",
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "better-auth": "^1.7.4",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "pg": "^8.23.0",
     "swagger-ui-express": "^5.0.1",
     "zod": "^4.6.2"
   },

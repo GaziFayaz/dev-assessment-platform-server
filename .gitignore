@@ -20,8 +20,9 @@ pnpm-debug.log*
 lerna-debug.log*
 *.log
 
-# Prisma generated client cache / migrations
+# Prisma generated client cache
 .prisma/
+src/generated/
 
 # Testing & Coverage
 coverage/

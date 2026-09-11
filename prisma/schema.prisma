@@ -1,0 +1,363 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/client"
+}
+
+// =============================================================
+// BETTER AUTH CORE MODELS (Generated via @better-auth/cli)
+// =============================================================
+
+model User {
+  id            String       @id
+  name          String
+  email         String
+  emailVerified Boolean      @default(false)
+  image         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  role          String?
+  banned        Boolean?     @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  sessions      Session[]
+  accounts      Account[]
+  members       Member[]
+  invitations   Invitation[]
+
+  // Domain Relations
+  createdProblems    Problem[]           @relation("ProblemCreator")
+  createdAssessments Assessment[]        @relation("AssessmentCreator")
+  evaluations        EvaluationReview[]
+  attempts           AssessmentAttempt[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+  impersonatedBy       String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Organization {
+  id          String       @id
+  name        String
+  slug        String
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+  members     Member[]
+  invitations Invitation[]
+
+  // Domain Relations
+  problems    Problem[]
+  assessments Assessment[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// =============================================================
+// DOMAIN ENUMS
+// =============================================================
+
+enum QuestionType {
+  MCQ_SINGLE // Single choice
+  MCQ_MULTIPLE // Multiple choice
+  WRITTEN // Short/long written answer
+  CODING // Code snippet / solution implementation
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum AssessmentStatus {
+  DRAFT // Being constructed by Recruiter / Admin
+  PUBLISHED // Ready for scheduling / invitations
+  ACTIVE // Currently open for candidate attempts
+  CLOSED // Past due date / no further attempts allowed
+  ARCHIVED // Deprecated
+}
+
+enum AttemptStatus {
+  INVITED // Invitation sent, candidate not yet started
+  IN_PROGRESS // Candidate started the assessment (timer running)
+  SUBMITTED // Candidate manually submitted answers
+  AUTO_SUBMITTED // Timer expired, system auto-finalized
+  UNDER_REVIEW // In evaluation queue awaiting human grading
+  COMPLETED // All sections evaluated, final score ready
+  EXPIRED // Invitation expired without attempt
+}
+
+enum EvaluationStatus {
+  NOT_REQUIRED // Fully automated (e.g. 100% MCQ assessment)
+  PENDING // Awaiting reviewer claim/assignment
+  IN_REVIEW // Recruiter/Admin is actively grading
+  EVALUATED // Manual evaluation finalized
+}
+
+// =============================================================
+// ASSESSMENT DOMAIN MODELS
+// =============================================================
+
+model Problem {
+  id             String       @id @default(uuid())
+  organizationId String? // Null if platform-level global question
+  creatorId      String // User who authored the problem
+  title          String
+  description    String       @db.Text
+  type           QuestionType
+  difficulty     Difficulty   @default(MEDIUM)
+  defaultPoints  Float        @default(10.0)
+  tags           String[]
+
+  // MCQ Data: Array<{ id: string, text: string, isCorrect: boolean }>
+  mcqOptions Json?
+
+  // Coding / Written Data
+  codingDetails    Json? // Starter code, allowed languages, sample I/O, constraints
+  evaluationRubric String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization       Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator            User                @relation("ProblemCreator", fields: [creatorId], references: [id])
+  assessmentProblems AssessmentProblem[]
+  submissionAnswers  SubmissionAnswer[]
+
+  @@index([organizationId, type])
+}
+
+model Assessment {
+  id              String           @id @default(uuid())
+  organizationId  String
+  creatorId       String // Recruiter or Admin who created the assessment
+  title           String
+  description     String?          @db.Text
+  instructions    String?          @db.Text
+  durationMinutes Int // e.g. 60 minutes
+  passingScore    Float? // Minimum score to pass
+  totalScore      Float            @default(0.0)
+  status          AssessmentStatus @default(DRAFT)
+
+  // Scheduling window (optional)
+  validFrom  DateTime?
+  validUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User                  @relation("AssessmentCreator", fields: [creatorId], references: [id])
+  problems     AssessmentProblem[]
+  invitations  CandidateInvitation[]
+  attempts     AssessmentAttempt[]
+
+  @@index([organizationId, status])
+}
+
+model AssessmentProblem {
+  id           String @id @default(uuid())
+  assessmentId String
+  problemId    String
+  orderIndex   Int // Display ordering within assessment
+  points       Float // Points allocated for this problem in this assessment
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  problem    Problem    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+
+  @@unique([assessmentId, problemId])
+  @@index([assessmentId, orderIndex])
+}
+
+model CandidateInvitation {
+  id             String   @id @default(uuid())
+  assessmentId   String
+  candidateEmail String
+  candidateName  String?
+  inviteToken    String   @unique
+  expiresAt      DateTime
+  isAccepted     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  assessment Assessment          @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  attempts   AssessmentAttempt[]
+
+  @@index([inviteToken])
+  @@index([assessmentId, candidateEmail])
+}
+
+model AssessmentAttempt {
+  id             String  @id @default(uuid())
+  assessmentId   String
+  invitationId   String?
+  candidateId    String // Foreign key to User (Mandatory per Option B)
+  candidateEmail String // Captured from invitation / verified candidate account
+
+  status      AttemptStatus @default(INVITED)
+  startedAt   DateTime?
+  submittedAt DateTime?
+  expiresAt   DateTime? // Hard deadline calculated at start: startedAt + durationMinutes
+
+  // Auto-calculated score totals
+  autoScore   Float    @default(0.0) // Automated MCQ score
+  manualScore Float    @default(0.0) // Points awarded by Recruiter/Admin
+  totalScore  Float    @default(0.0) // autoScore + manualScore
+  percentage  Float    @default(0.0)
+  isPassed    Boolean?
+
+  evaluationStatus EvaluationStatus @default(NOT_REQUIRED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assessment Assessment           @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  invitation CandidateInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+  candidate  User                 @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  answers    SubmissionAnswer[]
+  evaluation EvaluationReview?
+
+  @@index([assessmentId, status])
+  @@index([candidateId])
+  @@index([candidateEmail])
+}
+
+model SubmissionAnswer {
+  id        String @id @default(uuid())
+  attemptId String
+  problemId String
+
+  // Candidate Response
+  selectedOptions  String[] // Selected option IDs for MCQs
+  writtenAnswer    String?  @db.Text // Text content for written questions
+  submittedCode    String?  @db.Text // Code content for coding questions
+  selectedLanguage String? // e.g. "typescript", "python", "javascript"
+
+  // Automated Scoring (for MCQs)
+  autoScore Float    @default(0.0)
+  isCorrect Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attempt         AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  problem         Problem           @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  evaluationScore EvaluationScore?
+
+  @@unique([attemptId, problemId])
+}
+
+model EvaluationReview {
+  id               String           @id @default(uuid())
+  attemptId        String           @unique
+  evaluatorId      String? // User (Recruiter or Company Admin) who reviewed
+  overallFeedback  String?          @db.Text
+  evaluationStatus EvaluationStatus @default(PENDING)
+  evaluatedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  attempt   AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  evaluator User?             @relation(fields: [evaluatorId], references: [id], onDelete: SetNull)
+  scores    EvaluationScore[]
+
+  @@index([evaluatorId, evaluationStatus])
+}
+
+model EvaluationScore {
+  id                 String   @id @default(uuid())
+  reviewId           String
+  submissionAnswerId String   @unique
+  awardedPoints      Float    @default(0.0)
+  maxPoints          Float
+  feedback           String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  review           EvaluationReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  submissionAnswer SubmissionAnswer @relation(fields: [submissionAnswerId], references: [id], onDelete: Cascade)
+}
