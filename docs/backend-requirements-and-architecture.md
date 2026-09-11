@@ -1,7 +1,7 @@
 # Backend Requirements & Technical Architecture Specification
 ## Developer Assessment & Coding Platform Server
 **Category**: Education / Recruitment SaaS Platform  
-**Target Stack**: Node.js, Express, TypeScript, Prisma ORM, PostgreSQL, Better Auth
+**Target Stack**: Node.js, Express, TypeScript, Prisma ORM, PostgreSQL, Better Auth, Zod, OpenAPI/Swagger (Swagger UI & @asteasolutions/zod-to-openapi)
 
 ---
 
@@ -16,6 +16,7 @@ The **Developer Assessment & Coding Platform** is a multi-tenant recruitment and
      - **`organization`**: Multi-tenancy (Organizations, Memberships, Invitations, active organization context).
      - **`admin`**: Platform-wide administrative governance (`PLATFORM_ADMIN`).
      - **`bearer`**: Support for both HTTP-only cookies and `Authorization: Bearer <token>` headers for API clients.
+     - **`openAPI`**: Automatic OpenAPI 3.1 schema generation for native authentication, organization, and administrative endpoints.
 2. **Hybrid Evaluation (No Auto-Judge Engine)**:
    - **No containerized code execution engine** (no Judge0 / Docker runner).
    - **Automated Grading for MCQs**: Scored automatically upon submission against correct answer keys.
@@ -25,6 +26,10 @@ The **Developer Assessment & Coding Platform** is a multi-tenant recruitment and
    - The system verifies that the logged-in candidate's verified email matches the invitation record before granting attempt access.
 4. **Mandatory CLI-First Tooling & Schema Discipline**:
    - Strictly mandates official CLI tooling for dependency management (`npm`), schema generation (`@better-auth/cli`), database migrations (`prisma migrate`), and compile-time verification (`tsc`).
+5. **Automated OpenAPI / Swagger Documentation (Code-First via Zod)**:
+   - Unified API documentation portal hosted at `/api/docs` (with raw specification at `/api/docs/openapi.json`).
+   - Built on `@asteasolutions/zod-to-openapi` for custom domain routes and Better Auth's official `openAPI()` plugin for authentication routes.
+   - **Zero Documentation Drift**: The exact same Zod schemas performing runtime validation also generate the OpenAPI 3.1 request, parameter, and response schemas.
 
 ---
 
@@ -49,22 +54,23 @@ The backend follows a **Modular Clean Layered Architecture** with an integrated 
 
 ```
 src/
-├── app.ts                  # Express application configuration & middleware pipeline
+├── app.ts                  # Express application configuration, middleware pipeline & Swagger UI mount
 ├── server.ts               # HTTP server entry point & graceful shutdown
 ├── config/                 # Environment variables (Zod validated), constants
 ├── lib/
 │   ├── prisma.ts           # Prisma client singleton instance
-│   └── auth.ts             # Better Auth instance, Prisma adapter & plugin setup
+│   ├── auth.ts             # Better Auth instance, Prisma adapter & plugin setup (inc. openAPI)
+│   └── openapi.ts          # OpenAPI registry singleton, schema merger & spec builder
 ├── errors/                 # AppError class, error codes, global error handler middleware
 ├── middlewares/            # Auth session guard, organization role guard, validation
-├── routes/                 # Aggregated API router (/api/v1/...)
+├── routes/                 # Aggregated API router (/api/v1/...) & /api/docs Swagger router
 └── modules/                # Feature-based domain modules
-    ├── problem/            # Problem bank: MCQ, Written, Coding questions & rubrics
-    ├── assessment/         # Assessment builder, configuration, publish lifecycle
-    ├── invitation/         # Candidate invitations & invitation verification
-    ├── attempt/            # Timed assessment attempt engine, draft autosave, submission
-    ├── evaluation/         # Evaluation queue, manual scoring, reviewer feedback
-    └── report/             # Score aggregation, candidate report cards, analytics
+    ├── problem/            # Problem bank: schema (Zod+OpenAPI), controller, service, routes
+    ├── assessment/         # Assessment builder: schema (Zod+OpenAPI), controller, service, routes
+    ├── invitation/         # Candidate invitations: schema, controller, service, routes
+    ├── attempt/            # Timed attempt engine: schema, controller, service, routes
+    ├── evaluation/         # Evaluation queue: schema, controller, service, routes
+    └── report/             # Score aggregation & scorecards: schema, controller, service, routes
 ```
 
 ### 3.1 Better Auth Configuration (`src/lib/auth.ts`)
@@ -74,6 +80,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins/organization";
 import { admin } from "better-auth/plugins/admin";
 import { bearer } from "better-auth/plugins/bearer";
+import { openAPI } from "better-auth/plugins";
 import { prisma } from "./prisma";
 
 export const auth = betterAuth({
@@ -93,6 +100,7 @@ export const auth = betterAuth({
     }),
     admin(),
     bearer(),
+    openAPI(),          // Generates OpenAPI schemas for all /api/auth/* routes
   ],
 });
 ```
@@ -160,6 +168,102 @@ export const requireCompanyRole = (allowedRoles: ("admin" | "recruiter")[]) => {
     req.companyMember = member;
     next();
   };
+};
+```
+
+### 3.3 OpenAPI Registry & Swagger UI Architecture (`src/lib/openapi.ts` & `src/app.ts`)
+
+The platform implements a **Code-First OpenAPI 3.1 Registry** using `@asteasolutions/zod-to-openapi` combined with Better Auth's schema generator:
+
+#### OpenAPI Registry Singleton (`src/lib/openapi.ts`)
+```typescript
+import { OpenAPIRegistry, OpenApiGeneratorV31 } from "@asteasolutions/zod-to-openapi";
+import { auth } from "./auth";
+
+// Domain registry for all custom module endpoints
+export const registry = new OpenAPIRegistry();
+
+// Register standard security schemes
+registry.registerComponent("securitySchemes", "BearerAuth", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT/SessionToken",
+  description: "Better Auth session token supplied via Authorization header (bearer plugin)",
+});
+
+registry.registerComponent("securitySchemes", "CookieAuth", {
+  type: "apiKey",
+  in: "cookie",
+  name: "better-auth.session_token",
+  description: "Better Auth session cookie for browser clients",
+});
+
+registry.registerComponent("securitySchemes", "OrganizationContext", {
+  type: "apiKey",
+  in: "header",
+  name: "x-organization-id",
+  description: "Active Organization UUID required for tenant-scoped operations",
+});
+
+// Build merged OpenAPI 3.1 specification document
+export const buildOpenAPISpec = async () => {
+  const generator = new OpenApiGeneratorV31(registry.definitions);
+  const domainSpec = generator.generateDocument({
+    openapi: "3.1.0",
+    info: {
+      title: "Developer Assessment & Coding Platform API",
+      version: "1.0.0",
+      description: "Multi-tenant recruitment and educational assessment backend API specification",
+    },
+    servers: [
+      { url: "/api/v1", description: "V1 Domain API" },
+      { url: "/", description: "Root Server" },
+    ],
+  });
+
+  // Extract Better Auth OpenAPI schema from plugin
+  const authSpec = await (auth.api as any).generateOpenAPISchema();
+
+  // Deep-merge auth endpoints and domain endpoints
+  return {
+    ...domainSpec,
+    paths: {
+      ...(authSpec?.paths || {}),
+      ...domainSpec.paths,
+    },
+    components: {
+      ...domainSpec.components,
+      schemas: {
+        ...(authSpec?.components?.schemas || {}),
+        ...(domainSpec.components?.schemas || {}),
+      },
+    },
+  };
+};
+```
+
+#### Swagger UI Mount (`src/app.ts`)
+```typescript
+import swaggerUi from "swagger-ui-express";
+import { buildOpenAPISpec } from "./lib/openapi";
+
+export const configureSwagger = async (app: express.Application) => {
+  const openapiSpec = await buildOpenAPISpec();
+
+  // Interactive Swagger UI documentation
+  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+    },
+    customSiteTitle: "Dev Assessment Platform API Docs",
+  }));
+
+  // Raw OpenAPI 3.1 JSON endpoint for client SDKs & Postman import
+  app.get("/api/docs/openapi.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.json(openapiSpec);
+  });
 };
 ```
 
@@ -614,10 +718,139 @@ Because there is **no automated coding execution sandbox**, evaluations are perf
 
 ---
 
-## 7. REST API Endpoint Catalog
+## 7. REST API Endpoint Catalog & OpenAPI Contract
 
-### 7.1 Better Auth Native Endpoints (`/api/auth/*`)
-Handled directly by Better Auth's handler via `toNodeHandler(auth)`:
+### 7.1 OpenAPI Documentation Standards & Response Envelopes
+
+All custom domain API routes (`/api/v1/*`) are documented code-first using `@asteasolutions/zod-to-openapi`. Every endpoint must register its route path, parameters, request body, and response schemas in the shared OpenAPI registry.
+
+#### 1. Standard Response Envelopes
+
+All JSON responses must conform to standard response envelopes to guarantee predictable client-side consumption and typed OpenAPI schemas:
+
+##### Standard Success Envelope (`ApiResponse<T>`)
+```typescript
+import { z } from "zod";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+
+extendZodWithOpenApi(z);
+
+export const createApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
+  z.object({
+    success: z.literal(true).openapi({ example: true }),
+    message: z.string().optional().openapi({ example: "Operation completed successfully" }),
+    data: dataSchema,
+  });
+```
+
+##### Standard Paginated Envelope (`ApiPaginatedResponse<T>`)
+```typescript
+export const createPaginatedResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
+  z.object({
+    success: z.literal(true).openapi({ example: true }),
+    data: z.array(itemSchema),
+    meta: z.object({
+      page: z.number().int().positive().openapi({ example: 1 }),
+      limit: z.number().int().positive().openapi({ example: 20 }),
+      totalItems: z.number().int().nonnegative().openapi({ example: 45 }),
+      totalPages: z.number().int().nonnegative().openapi({ example: 3 }),
+    }),
+  });
+```
+
+##### Standard Error Envelope (`ApiErrorResponse`)
+```typescript
+export const ApiErrorResponseSchema = z.object({
+  success: z.literal(false).openapi({ example: false }),
+  message: z.string().openapi({ example: "Validation failed" }),
+  code: z.string().openapi({ example: "VALIDATION_ERROR" }),
+  errors: z
+    .array(
+      z.object({
+        field: z.string().optional().openapi({ example: "email" }),
+        message: z.string().openapi({ example: "Invalid email format" }),
+      })
+    )
+    .optional(),
+});
+```
+
+#### 2. Standard HTTP Status Code Requirements in OpenAPI
+
+Every registered route must declare explicit schemas for:
+- `200 OK` or `201 Created`: Returns `createApiResponseSchema(DataSchema)` or `createPaginatedResponseSchema(ItemSchema)`.
+- `400 Bad Request`: Invalid parameters or business constraint violation.
+- `401 Unauthorized`: Missing or invalid Better Auth session / bearer token.
+- `403 Forbidden`: Insufficient role or cross-tenant access attempt.
+- `404 Not Found`: Target resource UUID not found.
+- `422 Unprocessable Entity`: Zod schema validation errors with field details.
+- `500 Internal Server Error`: Unhandled server exception.
+
+#### 3. Data Projection & Privacy Rules in OpenAPI DTOs
+
+To prevent cheating and leaking assessment keys, schemas must be strictly segregated by persona:
+- **`AssessmentAdminDetailResponse` (Recruiter / Company Admin)**: Exposes full question definitions, test cases, and the `correctOptionIds` / `scoringCriteria` rubrics.
+- **`AssessmentCandidateAttemptResponse` (Candidate)**: Strictly scrubs all `correctOptionIds`, hidden test cases, and evaluation rubrics. Only statement, public sample I/O, and options (without correctness flags) are serialized.
+- OpenAPI definitions must expose these as separate, distinct component schemas to provide unambiguous contract specifications for frontend engineers.
+
+#### 4. Code-First Endpoint Registration Pattern
+
+Example route registration in `src/modules/problem/problem.schema.ts`:
+```typescript
+import { registry } from "../../lib/openapi";
+import { z } from "zod";
+import { createApiResponseSchema, ApiErrorResponseSchema } from "../../lib/openapi-schemas";
+
+export const CreateProblemBodySchema = z.object({
+  title: z.string().min(3).max(200).openapi({ example: "Implement LRU Cache" }),
+  statement: z.string().min(10).openapi({ example: "Design a data structure that follows..." }),
+  type: z.enum(["MCQ_SINGLE", "MCQ_MULTIPLE", "WRITTEN", "CODING"]).openapi({ example: "CODING" }),
+  difficulty: z.enum(["EASY", "MEDIUM", "HARD"]).openapi({ example: "MEDIUM" }),
+  tags: z.array(z.string()).default([]).openapi({ example: ["data-structures", "hash-table"] }),
+  evaluationRubric: z.record(z.any()).optional(),
+});
+
+export const ProblemResponseSchema = CreateProblemBodySchema.extend({
+  id: z.string().uuid().openapi({ example: "d3b07384-d113-4674-bfd7-58f7004f2f01" }),
+  organizationId: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+// Register route with Swagger
+registry.registerPath({
+  method: "post",
+  path: "/problems",
+  tags: ["Problems"],
+  summary: "Create a new problem in the organization problem bank",
+  description: "Creates an MCQ, written, or coding challenge with rubric. Requires recruiter or company admin role.",
+  security: [
+    { BearerAuth: [], OrganizationContext: [] },
+    { CookieAuth: [], OrganizationContext: [] },
+  ],
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: CreateProblemBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Problem created successfully",
+      content: { "application/json": { schema: createApiResponseSchema(ProblemResponseSchema) } },
+    },
+    400: { description: "Bad Request", content: { "application/json": { schema: ApiErrorResponseSchema } } },
+    401: { description: "Unauthorized", content: { "application/json": { schema: ApiErrorResponseSchema } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: ApiErrorResponseSchema } } },
+  },
+});
+```
+
+---
+
+### 7.2 Better Auth Native Endpoints (`/api/auth/*`)
+Handled directly by Better Auth's handler via `toNodeHandler(auth)` and automatically documented in OpenAPI via the `openAPI()` plugin:
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
@@ -635,10 +868,10 @@ Handled directly by Better Auth's handler via `toNodeHandler(auth)`:
 
 ---
 
-### 7.2 Custom Domain API Endpoints (`/api/v1/*`)
-All custom business routes require `requireAuth` and appropriate role guards:
+### 7.3 Custom Domain API Endpoints (`/api/v1/*`)
+All custom business routes require `requireAuth` and appropriate role guards. In the OpenAPI document, they are grouped under dedicated tags and require `BearerAuth` or `CookieAuth`:
 
-#### Problem Bank (`/api/v1/problems`)
+#### Problem Bank (`/api/v1/problems` — Tag: `Problems`)
 | Method | Endpoint | Required Role | Description |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/v1/problems` | `admin`, `recruiter` | Create problem (MCQ, Written, Coding) with rubric |
@@ -647,7 +880,7 @@ All custom business routes require `requireAuth` and appropriate role guards:
 | `PUT` | `/api/v1/problems/:id` | `admin`, `recruiter` | Update problem details (locked if in active assessment) |
 | `DELETE` | `/api/v1/problems/:id` | `admin`, `recruiter` | Soft-delete / archive problem |
 
-#### Assessment Builder (`/api/v1/assessments`)
+#### Assessment Builder (`/api/v1/assessments` — Tag: `Assessments`)
 | Method | Endpoint | Required Role | Description |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/v1/assessments` | `admin`, `recruiter` | Create assessment draft (duration, passing score, title) |
@@ -658,22 +891,22 @@ All custom business routes require `requireAuth` and appropriate role guards:
 | `PATCH` | `/api/v1/assessments/:id/status` | `admin`, `recruiter` | Transition status (DRAFT $\rightarrow$ PUBLISHED $\rightarrow$ ACTIVE $\rightarrow$ CLOSED) |
 | `DELETE` | `/api/v1/assessments/:id` | `admin` | Archive / delete assessment |
 
-#### Candidate Invitations (`/api/v1/assessments/:id/invitations`)
+#### Candidate Invitations (`/api/v1/assessments/:id/invitations` — Tag: `Invitations`)
 | Method | Endpoint | Required Role | Description |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/v1/assessments/:id/invitations` | `admin`, `recruiter` | Send candidate invitations (single or bulk emails) |
 | `GET` | `/api/v1/assessments/:id/invitations` | `admin`, `recruiter` | List sent invitations and status (Invited/Started/Done) |
 | `GET` | `/api/v1/invitations/verify/:token` | Authenticated Candidate | Verify invite token against logged-in user email |
 
-#### Candidate Attempt Engine (`/api/v1/attempts`)
+#### Candidate Attempt Engine (`/api/v1/attempts` — Tag: `Attempts`)
 | Method | Endpoint | Required Role | Description |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/v1/attempts/start` | Authenticated Candidate | Validate invitation, start timed assessment, lock timer |
-| `GET` | `/api/v1/attempts/:attemptId` | Authenticated Candidate | Get current attempt session, remaining time, answer drafts |
+| `GET` | `/api/v1/attempts/:attemptId` | Authenticated Candidate | Get current attempt session, remaining time, answer drafts (scrubbed DTO) |
 | `PUT` | `/api/v1/attempts/:attemptId/answers` | Authenticated Candidate | Autosave answer draft for a problem |
 | `POST` | `/api/v1/attempts/:attemptId/submit` | Authenticated Candidate | Final submission of assessment answers |
 
-#### Evaluation Queue & Review (`/api/v1/evaluations`)
+#### Evaluation Queue & Review (`/api/v1/evaluations` — Tag: `Evaluations`)
 | Method | Endpoint | Required Role | Description |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/v1/evaluations/queue` | `admin`, `recruiter` | List attempts pending human evaluation (filter by assessment) |
@@ -682,7 +915,7 @@ All custom business routes require `requireAuth` and appropriate role guards:
 | `POST` | `/api/v1/evaluations/:reviewId/score` | `admin`, `recruiter` | Score individual question with marks and feedback |
 | `POST` | `/api/v1/evaluations/:reviewId/finalize` | `admin`, `recruiter` | Finalize evaluation, compute total scores, transition to COMPLETED |
 
-#### Reports & Analytics (`/api/v1/reports`)
+#### Reports & Analytics (`/api/v1/reports` — Tag: `Reports`)
 | Method | Endpoint | Required Role | Description |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/v1/reports/assessments/:id/summary` | `admin`, `recruiter` | Assessment stats (total attempts, pass rate, score distribution) |
@@ -714,6 +947,12 @@ All custom business routes require `requireAuth` and appropriate role guards:
 5. **Tenant Isolation**:
    - All company queries strictly filter by `WHERE organizationId = req.organizationId`.
 
+6. **OpenAPI Security Schemes & RBAC Contract**:
+   - The OpenAPI specification acts as the source of truth for authorization boundaries:
+     - Endpoints requiring company tenancy declare `security: [{ BearerAuth: [], OrganizationContext: [] }, { CookieAuth: [], OrganizationContext: [] }]`.
+     - Candidate endpoints declare `security: [{ BearerAuth: [] }, { CookieAuth: [] }]` (no company header required).
+     - Endpoints requiring specific RBAC roles explicitly document required permissions in the OpenAPI operation description.
+
 ---
 
 ## 9. Development Tooling & Mandatory CLI-First Operational Standards
@@ -727,10 +966,10 @@ All custom business routes require `requireAuth` and appropriate role guards:
 - **Latest Compatible Versions**:
   ```bash
   # Production dependencies
-  npm install express@latest @prisma/client@latest better-auth@latest dotenv@latest zod@latest cors@latest
+  npm install express@latest @prisma/client@latest better-auth@latest dotenv@latest zod@latest cors@latest swagger-ui-express@latest @asteasolutions/zod-to-openapi@latest
 
   # Development dependencies
-  npm install -D typescript@latest prisma@latest @types/node@latest @types/express@latest @types/cors@latest tsx@latest
+  npm install -D typescript@latest prisma@latest @types/node@latest @types/express@latest @types/cors@latest @types/swagger-ui-express@latest tsx@latest
   ```
 - **Integrity**: Running `npm install` directly ensures proper peer dependency resolution, updates `package-lock.json` with correct cryptographic hashes, and executes necessary build hooks.
 
@@ -741,7 +980,7 @@ All custom business routes require `requireAuth` and appropriate role guards:
   # Automatically generate or update the Prisma schema based on auth.ts config and active plugins
   npx @better-auth/cli@latest generate
   ```
-- **Mandatory Trigger**: Whenever `src/lib/auth.ts` is created or plugins are added/modified (e.g. `organization`, `admin`, `bearer`), agents **MUST run `npx @better-auth/cli@latest generate`** to let the CLI update `prisma/schema.prisma`.
+- **Mandatory Trigger**: Whenever `src/lib/auth.ts` is created or plugins are added/modified (e.g. `organization`, `admin`, `bearer`, `openAPI`), agents **MUST run `npx @better-auth/cli@latest generate`** to let the CLI update `prisma/schema.prisma`.
 - **Database Synchronization**:
   ```bash
   # Apply Better Auth schema changes via Prisma migrations
@@ -784,7 +1023,16 @@ All custom business routes require `requireAuth` and appropriate role guards:
   npm run lint
   ```
 
-### 9.5 Summary Checklist of Forbidden AI Agent Anti-Patterns
+### 9.5 OpenAPI Documentation & Schema Discipline
+- **Mandatory Route Registration**: Never create, edit, or delete an Express route without simultaneously updating its corresponding Zod schema and OpenAPI registration in the module's `*.schema.ts`.
+- **Zero Undocumented Endpoints**: 100% of endpoints in `/api/v1/*` must be registered in `registry.registerPath`.
+- **Automated Verification**:
+  ```bash
+  # Script verifying that the generated OpenAPI spec builds without validation errors
+  npm run docs:validate
+  ```
+
+### 9.6 Summary Checklist of Forbidden AI Agent Anti-Patterns
 
 | Anti-Pattern (FORBIDDEN) | Standard CLI Practice (REQUIRED) |
 | :--- | :--- |
@@ -793,6 +1041,8 @@ All custom business routes require `requireAuth` and appropriate role guards:
 | Modifying database tables via raw SQL or ad-hoc DB GUI tools | Run `npx prisma migrate dev --name <migration_name>` |
 | Modifying `schema.prisma` without regenerating client | Run `npx prisma generate` immediately after schema changes |
 | Assuming code compiles without terminal verification | Run `npx tsc --noEmit` to verify type safety |
+| Creating an Express route without registering its OpenAPI schema | Register all endpoints in `*.schema.ts` with `@asteasolutions/zod-to-openapi` |
+| Hand-writing or maintaining static YAML/JSON Swagger files | Generate OpenAPI dynamically from Zod schemas and Better Auth `openAPI` plugin |
 
 ---
 
@@ -811,6 +1061,10 @@ All custom business routes require `requireAuth` and appropriate role guards:
    - Recruiter evaluation $\rightarrow$ scoring $\rightarrow$ scorecard generation.
    - Negative security tests: mismatched candidate email, late submission rejection, cross-tenant data access attempts.
 
+3. **OpenAPI & Contract Integrity Testing**:
+   - Automated test verifying that `GET /api/docs/openapi.json` returns HTTP `200` with a valid OpenAPI 3.1 JSON document.
+   - Contract verification test confirming that 100% of endpoints mounted in `src/routes` are registered in the OpenAPI spec.
+
 ---
 
 ## 11. Summary & Sign-off
@@ -821,3 +1075,4 @@ This updated specification provides a modern, production-grade architecture:
 - **Strict Candidate Access (Option B)**: Candidates are verified platform users linked directly to attempts.
 - **Clean Hybrid Evaluation**: MCQ auto-grading + Recruiter review queue for coding and written questions without requiring code sandbox runners.
 - **Strict CLI-First Discipline**: Standardizes on `npm`, `@better-auth/cli`, and `prisma` CLI workflows to eliminate schema drift and compilation discrepancies.
+- **Comprehensive OpenAPI 3.1 & Swagger Documentation**: Code-first, single source of truth via Zod (`@asteasolutions/zod-to-openapi`) and Better Auth's `openAPI()` plugin, providing an interactive API explorer at `/api/docs` and raw spec at `/api/docs/openapi.json`.

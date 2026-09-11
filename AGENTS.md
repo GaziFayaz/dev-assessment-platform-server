@@ -22,7 +22,9 @@ This repository contains the backend server for the **Developer Assessment & Cod
   - `organization` (multi-tenancy, member roles: `COMPANY_ADMIN`, `RECRUITER`)
   - `admin` (global platform administration: `PLATFORM_ADMIN`)
   - `bearer` (Bearer token header authentication support alongside cookies)
-- **Validation**: Zod (environment variables, request validation)
+  - `openAPI` (OpenAPI schema generation for auth endpoints)
+- **API Documentation**: OpenAPI 3.1 & Swagger (`swagger-ui-express`, `@asteasolutions/zod-to-openapi`)
+- **Validation**: Zod (environment variables, request validation, OpenAPI schema generation)
 - **Package Manager**: npm
 
 ---
@@ -40,14 +42,20 @@ This repository contains the backend server for the **Developer Assessment & Cod
 
 3. **Modular Clean Layered Architecture**:
    - Code is structured by feature modules under `src/modules/` (e.g., `problem/`, `assessment/`, `invitation/`, `attempt/`, `evaluation/`, `report/`).
-   - Each module contains dedicated controller, service, repository, and route layers.
-   - Common configuration, database singletons, and authentication setups live in `src/config/` and `src/lib/`.
+   - Each module contains dedicated controller, service, repository, route, and `*.schema.ts` layers.
+   - Common configuration, database singletons, OpenAPI registry, and authentication setups live in `src/config/` and `src/lib/`.
 
 4. **CLI-First Tooling & Schema Discipline**:
    - Use official CLI tools for migrations and schema generations:
      - Better Auth CLI: `npx @better-auth/cli generate`
      - Prisma CLI: `npx prisma migrate dev`, `npx prisma generate`
    - Compile-time checking: `npm run build` / `npx tsc --noEmit`
+
+5. **Zero-Drift Code-First OpenAPI Documentation**:
+   - All custom endpoints (`/api/v1/*`) must be registered in the OpenAPI registry (`src/lib/openapi.ts`) using `@asteasolutions/zod-to-openapi`.
+   - Better Auth endpoints (`/api/auth/*`) are generated via the `openAPI()` plugin and unified into the master specification.
+   - Interactive documentation portal is served at `/api/docs` and raw spec at `/api/docs/openapi.json`.
+   - Undocumented endpoints and hand-edited static YAML/JSON swagger specs are strictly prohibited.
 
 ---
 
@@ -62,5 +70,6 @@ This repository contains the backend server for the **Developer Assessment & Cod
 - **Full Specification**: [docs/backend-requirements-and-architecture.md](file:///d:/Codes/programming-hero/Level-2/mission6/dev-assessment-platform-server/docs/backend-requirements-and-architecture.md)
 - **Prisma Schema**: `prisma/schema.prisma`
 - **Auth Setup**: `src/lib/auth.ts`
+- **OpenAPI Registry & Spec Builder**: `src/lib/openapi.ts`
 - **Prisma Singleton**: `src/lib/prisma.ts`
 
