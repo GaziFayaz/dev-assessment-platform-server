@@ -51,9 +51,16 @@ This repository contains the backend server for the **Developer Assessment & Cod
 
 ---
 
-## 4. Quick File Reference
+## 4. Git Commit Guidelines
+
+- **Incremental Commits**: Always commit to Git incrementally with meaningful commits with detailed descriptions when making modifications and have done any small but significant updates or additions.
+
+---
+
+## 5. Quick File Reference
 
 - **Full Specification**: [docs/backend-requirements-and-architecture.md](file:///d:/Codes/programming-hero/Level-2/mission6/dev-assessment-platform-server/docs/backend-requirements-and-architecture.md)
 - **Prisma Schema**: `prisma/schema.prisma`
 - **Auth Setup**: `src/lib/auth.ts`
 - **Prisma Singleton**: `src/lib/prisma.ts`
+
