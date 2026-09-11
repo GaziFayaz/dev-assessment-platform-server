@@ -1,0 +1,46 @@
+{
+  "name": "dev-assessment-platform-server",
+  "version": "1.0.0",
+  "description": "Backend server for the Developer Assessment & Coding Platform",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "docs:validate": "tsx src/scripts/validate-docs.ts"
+  },
+  "keywords": [
+    "assessment",
+    "recruitment",
+    "better-auth",
+    "express",
+    "prisma",
+    "openapi"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@prisma/client": "^7.10.0",
+    "better-auth": "^1.7.4",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "^1.4.22",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.9",
+    "@types/swagger-ui-express": "^4.1.8",
+    "prisma": "^7.10.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
