@@ -24,12 +24,20 @@ export const createApp = async (): Promise<Express> => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Mount Better Auth handler
-  app.all("/api/auth/*", toNodeHandler(auth));
+  // Mount Better Auth handler (Express 5 compatible wildcard)
+  app.all("/api/auth", toNodeHandler(auth));
+  app.all("/api/auth/*any", toNodeHandler(auth));
 
   // Build and mount OpenAPI / Swagger UI documentation
   const openapiSpec = await buildOpenAPISpec();
 
+  // Raw OpenAPI 3.1 JSON endpoint for client SDKs & Postman import
+  app.get("/api/docs/openapi.json", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "application/json");
+    res.json(openapiSpec);
+  });
+
+  // Interactive Swagger UI documentation
   app.use(
     "/api/docs",
     swaggerUi.serve,
@@ -41,11 +49,6 @@ export const createApp = async (): Promise<Express> => {
       customSiteTitle: "Dev Assessment Platform API Docs",
     })
   );
-
-  app.get("/api/docs/openapi.json", (_req: Request, res: Response) => {
-    res.setHeader("Content-Type", "application/json");
-    res.json(openapiSpec);
-  });
 
   // Mount Domain API Router
   app.use("/api/v1", apiV1Router);
