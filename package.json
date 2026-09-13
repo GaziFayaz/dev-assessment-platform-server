@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "prisma db seed",
-    "docs:validate": "tsx src/scripts/validate-docs.ts"
+    "docs:validate": "tsx src/scripts/validate-docs.ts",
+    "test:e2e": "tsx src/scripts/test-problems-e2e.ts"
   },
   "keywords": [
     "assessment",
