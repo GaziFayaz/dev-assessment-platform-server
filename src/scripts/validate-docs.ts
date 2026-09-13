@@ -1,4 +1,5 @@
 import { buildOpenAPISpec } from "../lib/openapi.js";
+import "../routes/index.js";
 
 async function main() {
   console.log("🔍 Validating OpenAPI specification...");
