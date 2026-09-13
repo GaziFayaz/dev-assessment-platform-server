@@ -1032,7 +1032,36 @@ All custom business routes require `requireAuth` and appropriate role guards. In
   npm run docs:validate
   ```
 
-### 9.6 Summary Checklist of Forbidden AI Agent Anti-Patterns
+### 9.6 Database Seeding & Demo Data Architecture
+To support continuous integration, testing, local development, and demonstration environments, the project implements a **Modular Seeding Architecture** under `prisma/`:
+
+```
+prisma/
+├── seed.ts                    # Master orchestrator script (invoked by Prisma CLI)
+└── seeds/                     # Feature-specific seed modules
+    ├── users.seed.ts          # Core personas (PLATFORM_ADMIN, COMPANY_ADMIN, RECRUITER, CANDIDATES) & demo org
+    ├── problems.seed.ts       # (Built with Problem Bank module)
+    ├── assessments.seed.ts    # (Built with Assessment Builder module)
+    ├── invitations.seed.ts    # (Built with Invitations module)
+    └── attempts.seed.ts       # (Built with Attempts & Evaluations modules)
+```
+
+#### Seeding Rules & Standards
+1. **Mandatory Seed Deliverables**: Every newly implemented feature module must include its corresponding modular seed file in `prisma/seeds/<feature>.seed.ts` and be imported into `prisma/seed.ts`.
+2. **Strict Idempotency**: Every seed module must be safe to run against an already-seeded database without throwing unique constraint violations (using `upsert` or pre-flight existence checks).
+3. **Better Auth Credential Compatibility**: Seeded users requiring email/password authentication must hash passwords using `hashPassword` from `better-auth/crypto` and generate corresponding `Account` records (`providerId: "credential"`).
+4. **Standard Default Credentials**:
+   - Password: `Password123!`
+   - `admin@platform.dev` (`PLATFORM_ADMIN`)
+   - `admin@techcorp.dev` (`COMPANY_ADMIN` of `TechCorp Solutions`, slug `techcorp`)
+   - `recruiter@techcorp.dev` (`RECRUITER` of `TechCorp Solutions`)
+   - `alice@candidate.dev`, `bob@candidate.dev` (`CANDIDATE`)
+5. **Execution Command**:
+   ```bash
+   npm run prisma:seed # or npx prisma db seed
+   ```
+
+### 9.7 Summary Checklist of Forbidden AI Agent Anti-Patterns
 
 | Anti-Pattern (FORBIDDEN) | Standard CLI Practice (REQUIRED) |
 | :--- | :--- |
@@ -1040,6 +1069,8 @@ All custom business routes require `requireAuth` and appropriate role guards. In
 | Manually writing Better Auth schema models in `schema.prisma` | Run `npx @better-auth/cli@latest generate` |
 | Modifying database tables via raw SQL or ad-hoc DB GUI tools | Run `npx prisma migrate dev --name <migration_name>` |
 | Modifying `schema.prisma` without regenerating client | Run `npx prisma generate` immediately after schema changes |
+| Implementing feature entities without corresponding seed data | Build `prisma/seeds/<feature>.seed.ts` and register in `prisma/seed.ts` |
+| Writing non-idempotent seed scripts that fail on subsequent runs | Use `upsert` or existence checks in all seeders |
 | Assuming code compiles without terminal verification | Run `npx tsc --noEmit` to verify type safety |
 | Creating an Express route without registering its OpenAPI schema | Register all endpoints in `*.schema.ts` with `@asteasolutions/zod-to-openapi` |
 | Hand-writing or maintaining static YAML/JSON Swagger files | Generate OpenAPI dynamically from Zod schemas and Better Auth `openAPI` plugin |

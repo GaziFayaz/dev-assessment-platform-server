@@ -57,6 +57,13 @@ This repository contains the backend server for the **Developer Assessment & Cod
    - Interactive documentation portal is served at `/api/docs` and raw spec at `/api/docs/openapi.json`.
    - Undocumented endpoints and hand-edited static YAML/JSON swagger specs are strictly prohibited.
 
+6. **Feature Seeding & Demo Data Discipline**:
+   - **Mandatory Seed Pairings**: Whenever a new feature module or domain entity is implemented (e.g., `problem`, `assessment`, `invitation`, `attempt`, `evaluation`, `report`), agents **must simultaneously build or update corresponding seed files** under `prisma/seeds/<feature>.seed.ts`.
+   - **Master Orchestrator**: All seed modules must be registered and orchestrated in dependency order inside `prisma/seed.ts`.
+   - **Strict Idempotency**: All seeders must be idempotent (using `upsert` or existence verification) so that `npm run prisma:seed` can be executed repeatedly on existing databases without unique constraint violations.
+   - **Better Auth Credential Compatibility**: Seeded users with passwords must use `hashPassword` from `better-auth/crypto` and create corresponding `Account` records (`providerId: "credential"`). Default test password is `Password123!`.
+   - **CLI Seeding**: Seeds must be executable via `npm run prisma:seed` / `npx prisma db seed`.
+
 ---
 
 ## 4. Git Commit Guidelines
@@ -69,6 +76,8 @@ This repository contains the backend server for the **Developer Assessment & Cod
 
 - **Full Specification**: [docs/backend-requirements-and-architecture.md](file:///d:/Codes/programming-hero/Level-2/mission6/dev-assessment-platform-server/docs/backend-requirements-and-architecture.md)
 - **Prisma Schema**: `prisma/schema.prisma`
+- **Database Master Seed**: `prisma/seed.ts`
+- **Feature Seeds Directory**: `prisma/seeds/`
 - **Auth Setup**: `src/lib/auth.ts`
 - **OpenAPI Registry & Spec Builder**: `src/lib/openapi.ts`
 - **Prisma Singleton**: `src/lib/prisma.ts`
