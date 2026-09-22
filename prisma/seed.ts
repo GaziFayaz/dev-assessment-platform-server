@@ -1,6 +1,7 @@
 import { prisma } from "../src/lib/prisma.js";
 import { seedUsers } from "./seeds/users.seed.js";
 import { seedProblems } from "./seeds/problems.seed.js";
+import { seedAssessments } from "./seeds/assessments.seed.js";
 
 async function main() {
   console.log("🌱 =========================================");
@@ -10,18 +11,22 @@ async function main() {
 
   try {
     // 1. Core Users, Roles, and Organizations
-    console.log("\n📦 [1/2] Seeding Users, Personas & Organizations...");
+    console.log("\n📦 [1/3] Seeding Users, Personas & Organizations...");
     const userSummary = await seedUsers();
     console.log(`✨ Successfully seeded ${userSummary.usersCount} users and ${userSummary.orgsCount} organization(s).`);
 
     // 2. Problem Bank
-    console.log("\n📦 [2/2] Seeding Problem Bank Questions...");
+    console.log("\n📦 [2/3] Seeding Problem Bank Questions...");
     const problemSummary = await seedProblems(userSummary);
     console.log(`✨ Successfully seeded ${problemSummary.totalProblems} problem(s).`);
 
+    // 3. Assessment Builder
+    console.log("\n📦 [3/3] Seeding Assessments & Problem Assemblies...");
+    const assessmentSummary = await seedAssessments(userSummary);
+    console.log(`✨ Successfully seeded ${assessmentSummary.totalAssessments} assessment(s).`);
+
     // Modular Feature Seeders Hook:
     // Future feature modules will plug their seeders in here:
-    // 3. await seedAssessments(userSummary);
     // 4. await seedInvitations(userSummary);
     // 5. await seedAttempts(userSummary);
     // 6. await seedEvaluations(userSummary);

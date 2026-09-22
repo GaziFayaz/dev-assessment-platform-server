@@ -13,7 +13,8 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "prisma db seed",
     "docs:validate": "tsx src/scripts/validate-docs.ts",
-    "test:e2e": "tsx src/scripts/test-problems-e2e.ts"
+    "test:e2e": "tsx src/scripts/test-problems-e2e.ts",
+    "test:assessments": "tsx src/scripts/test-assessments-e2e.ts"
   },
   "keywords": [
     "assessment",
