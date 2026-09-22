@@ -3,6 +3,7 @@ import { seedUsers } from "./seeds/users.seed.js";
 import { seedProblems } from "./seeds/problems.seed.js";
 import { seedAssessments } from "./seeds/assessments.seed.js";
 import { seedInvitations } from "./seeds/invitations.seed.js";
+import { seedAttempts } from "./seeds/attempts.seed.js";
 
 async function main() {
   console.log("🌱 =========================================");
@@ -31,10 +32,10 @@ async function main() {
     const invitationSummary = await seedInvitations(userSummary);
     console.log(`✨ Successfully seeded ${invitationSummary.totalInvitations} invitation(s).`);
 
-    // Modular Feature Seeders Hook:
-    // Future feature modules will plug their seeders in here:
-    // 5. await seedAttempts(userSummary);
-    // 6. await seedEvaluations(userSummary);
+    // 5. Candidate Attempts & Evaluations
+    console.log("\n📦 [5/5] Seeding Candidate Attempts & Review Queue...");
+    const attemptSummary = await seedAttempts();
+    console.log(`✨ Successfully seeded ${attemptSummary.totalAttempts} candidate attempt(s).`);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log("\n=========================================");

@@ -37,6 +37,10 @@ export class AppError extends Error {
     return new AppError(409, message, errorCode);
   }
 
+  static gone(message = "Resource expired", errorCode = "GONE") {
+    return new AppError(410, message, errorCode);
+  }
+
   static unprocessableEntity(
     message = "Validation failed",
     errors?: Array<{ field?: string; message: string }>,
