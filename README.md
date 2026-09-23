@@ -44,23 +44,8 @@ This platform takes a **human-centered, rubric-driven approach**:
 
 ---
 
-## 🔑 Pre-Configured Test Credentials
-
-The database seeder (`npm run prisma:seed`) automatically creates ready-to-use accounts for each user persona. All accounts share the same default password:
-
-> **Default Password:** `Password123!`
-
-| Persona | Email | Organization / Scope | Permissions & Use Case |
-| :--- | :--- | :--- | :--- |
-| **Platform Admin** | `admin@platform.dev` | Global Platform | Global system oversight, platform user governance |
-| **Company Admin** | `admin@techcorp.dev` | `TechCorp Solutions` | Full tenant admin, team management, assessment & problem bank oversight |
-| **Recruiter** | `recruiter@techcorp.dev` | `TechCorp Solutions` | Curate questions, assemble assessments, send invitations, grade submissions |
-| **Candidate 1** | `alice@candidate.dev` | Candidate | Attempt assessments, submit answers, view scorecard (Alice Johnson) |
-| **Candidate 2** | `bob@candidate.dev` | Candidate | Attempt assessments, submit answers, view scorecard (Bob Smith) |
-
----
-
 ## 🛠️ Tech Stack
+## ️ Tech Stack
 
 - **Runtime & Language**: [Node.js](https://nodejs.org/) (v20+) & [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
 - **Web Framework**: [Express.js](https://expressjs.com/) (v5)
@@ -141,7 +126,14 @@ Populate the database with demo organizations, users, problem bank entries, asse
 npm run prisma:seed
 ```
 
-*(See [Pre-Configured Test Credentials](#-pre-configured-test-credentials) above for sample account logins, roles, and default password).*
+#### 🔑 Pre-Configured Test Accounts (Password: `Password123!`)
+
+| Persona | Email | Role / Context |
+| :--- | :--- | :--- |
+| **Platform Admin** | `admin@platform.dev` | Global platform administrator |
+| **Company Admin** | `admin@techcorp.dev` | Organization Admin (`TechCorp Solutions`) |
+| **Recruiter** | `recruiter@techcorp.dev` | Hiring manager / Evaluator (`TechCorp Solutions`) |
+| **Candidates** | `alice@candidate.dev`<br>`bob@candidate.dev` | Test-takers with active invitations & attempts |
 
 ---
 
