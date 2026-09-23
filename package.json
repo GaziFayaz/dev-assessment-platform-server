@@ -17,7 +17,8 @@
     "test:assessments": "tsx src/scripts/test-assessments-e2e.ts",
     "test:invitations": "tsx src/scripts/test-invitations-e2e.ts",
     "test:attempts": "tsx src/scripts/test-attempts-e2e.ts",
-    "test:evaluations": "tsx src/scripts/test-evaluations-e2e.ts"
+    "test:evaluations": "tsx src/scripts/test-evaluations-e2e.ts",
+    "test:reports": "tsx src/scripts/test-reports-e2e.ts"
   },
   "keywords": [
     "assessment",

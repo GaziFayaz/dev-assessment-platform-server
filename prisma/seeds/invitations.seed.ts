@@ -61,12 +61,20 @@ export async function seedInvitations(userSummary?: UserSummary) {
 
     const expiresAt = new Date(Date.now() + item.expiresInDays * 24 * 60 * 60 * 1000);
 
-    const existing = await prisma.candidateInvitation.findFirst({
+    let existing = await prisma.candidateInvitation.findUnique({
       where: {
-        assessmentId: assessment.id,
-        candidateEmail: item.candidateEmail,
+        inviteToken: item.inviteToken,
       },
     });
+
+    if (!existing) {
+      existing = await prisma.candidateInvitation.findFirst({
+        where: {
+          assessmentId: assessment.id,
+          candidateEmail: item.candidateEmail,
+        },
+      });
+    }
 
     if (existing) {
       const updated = await prisma.candidateInvitation.update({
