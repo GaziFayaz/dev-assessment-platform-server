@@ -4,6 +4,15 @@ The backend server for the **Developer Assessment & Coding Platform** — a mult
 
 ---
 
+## 🌐 Live Deployed Application
+
+- **Deployment Root URL**: [https://dev-assessment-platform-server.onrender.com](https://dev-assessment-platform-server.onrender.com)
+- **Interactive Swagger UI**: [https://dev-assessment-platform-server.onrender.com/api/docs](https://dev-assessment-platform-server.onrender.com/api/docs)
+- **OpenAPI 3.1 JSON Specification**: [https://dev-assessment-platform-server.onrender.com/api/docs/openapi.json](https://dev-assessment-platform-server.onrender.com/api/docs/openapi.json)
+- **Health Check Endpoint**: [https://dev-assessment-platform-server.onrender.com/api/v1/health](https://dev-assessment-platform-server.onrender.com/api/v1/health)
+
+---
+
 ## 💡 Project Idea & Concept
 
 Traditional technical assessment platforms often rely on complex, resource-heavy containerized sandboxes (like Docker or Judge0) to automatically execute arbitrary candidate code. 
@@ -44,8 +53,23 @@ This platform takes a **human-centered, rubric-driven approach**:
 
 ---
 
+## 🔑 Pre-Configured Test Credentials
+
+The database seeder (`npm run prisma:seed`) automatically creates ready-to-use accounts for each user persona. All accounts share the same default password:
+
+> **Default Password:** `Password123!`
+
+| Persona | Email | Organization / Scope | Permissions & Use Case |
+| :--- | :--- | :--- | :--- |
+| **Platform Admin** | `admin@platform.dev` | Global Platform | Global system oversight, platform user governance |
+| **Company Admin** | `admin@techcorp.dev` | `TechCorp Solutions` | Full tenant admin, team management, assessment & problem bank oversight |
+| **Recruiter** | `recruiter@techcorp.dev` | `TechCorp Solutions` | Curate questions, assemble assessments, send invitations, grade submissions |
+| **Candidate 1** | `alice@candidate.dev` | Candidate | Attempt assessments, submit answers, view scorecard (Alice Johnson) |
+| **Candidate 2** | `bob@candidate.dev` | Candidate | Attempt assessments, submit answers, view scorecard (Bob Smith) |
+
+---
+
 ## 🛠️ Tech Stack
-## ️ Tech Stack
 
 - **Runtime & Language**: [Node.js](https://nodejs.org/) (v20+) & [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
 - **Web Framework**: [Express.js](https://expressjs.com/) (v5)
@@ -126,14 +150,7 @@ Populate the database with demo organizations, users, problem bank entries, asse
 npm run prisma:seed
 ```
 
-#### 🔑 Pre-Configured Test Accounts (Password: `Password123!`)
-
-| Persona | Email | Role / Context |
-| :--- | :--- | :--- |
-| **Platform Admin** | `admin@platform.dev` | Global platform administrator |
-| **Company Admin** | `admin@techcorp.dev` | Organization Admin (`TechCorp Solutions`) |
-| **Recruiter** | `recruiter@techcorp.dev` | Hiring manager / Evaluator (`TechCorp Solutions`) |
-| **Candidates** | `alice@candidate.dev`<br>`bob@candidate.dev` | Test-takers with active invitations & attempts |
+*(See [Pre-Configured Test Credentials](#-pre-configured-test-credentials) above for ready-to-use login accounts and roles).*
 
 ---
 
@@ -149,10 +166,17 @@ The server will boot up with hot-reloading at **`http://localhost:5000`**.
 
 ## 📖 API Documentation
 
-Once the server is running, explore the interactive documentation:
+Explore the interactive API documentation and test endpoints directly via Swagger UI:
 
+### 🌐 Live Production
+- **Interactive Swagger UI**: [https://dev-assessment-platform-server.onrender.com/api/docs](https://dev-assessment-platform-server.onrender.com/api/docs)
+- **OpenAPI 3.1 JSON Specification**: [https://dev-assessment-platform-server.onrender.com/api/docs/openapi.json](https://dev-assessment-platform-server.onrender.com/api/docs/openapi.json)
+- **API Health Check**: [https://dev-assessment-platform-server.onrender.com/api/v1/health](https://dev-assessment-platform-server.onrender.com/api/v1/health)
+
+### 💻 Local Development
 - **Interactive Swagger UI**: [http://localhost:5000/api/docs](http://localhost:5000/api/docs)
 - **OpenAPI 3.1 JSON Specification**: [http://localhost:5000/api/docs/openapi.json](http://localhost:5000/api/docs/openapi.json)
+- **API Health Check**: [http://localhost:5000/api/v1/health](http://localhost:5000/api/v1/health)
 
 ---
 
